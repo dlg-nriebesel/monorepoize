@@ -55,6 +55,12 @@ function incorporate {
     echo "After incorporating $name $((after - before)) changes."
 }
 
+function join_by {
+    local IFS="$1"
+    shift
+    echo "$*"
+}
+
 #
 # Push down the contents of all branches with the same base name (e.g.
 # proj1/master, proj2/master) into a new branch with just that base
@@ -68,7 +74,9 @@ function pushdown {
 
     ensure_branch "$branch"
 
-    git show-ref --heads "$branch" | cut -c 53- | while read -r b; do
+    new_branches=()
+
+    while read -r b; do
 
         if [ "$b" != "$branch" ]; then
 
@@ -76,7 +84,8 @@ function pushdown {
 
             echo "Pushing $b into $dir."
 
-            git switch -c pushdown "$b"
+            git switch -c pushdown-$dir "$b"
+            new_branches+=(pushdown-$dir)
 
             tmpdir=$(mktemp -d tmp.XXXX)
             moved_something="false"
@@ -94,11 +103,20 @@ function pushdown {
             else
                 rmdir "$tmpdir"
             fi
-            git checkout "$branch"
-            git merge --allow-unrelated-histories -s recursive -X no-renames --no-ff -m "Merging $b to $branch." pushdown
-            git branch -d pushdown
         fi
+    done < <(git show-ref --heads "$branch" | cut -c 53-)
+
+    echo ${new_branches[@]}
+    git checkout "$branch"
+    git merge --allow-unrelated-histories -s octopus -X no-renames --no-ff ${new_branches[@]} || true
+    for tree in ${new_branches[@]};
+    do
+        git read-tree ${tree}
+        git checkout-index -a
     done
+    git add .
+    git commit -m "Octopus merge of: ${new_branches[*]} to $branch."
+    git branch -d ${new_branches[@]}
 
     echo "Done pushing $branch."
     sleep 1

@@ -2,7 +2,9 @@
 
 set -e
 
-source monorepo.sh
+BASEDIR=`cd $(dirname $0); pwd -P`
+
+source $BASEDIR/monorepo.sh
 
 here=$(pwd)
 input=$(realpath "$1")
